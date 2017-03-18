@@ -17,6 +17,8 @@ namespace FakeTrello.Tests.DAL
         public Mock<DbSet<Board>> mock_boards_set { get; set; }
         public IQueryable<Board> query_boards { get; set; }
         public List<Board> fake_board_table { get; set; }
+        public ApplicationUser sally { get; set; }
+        public ApplicationUser sammy { get; set; }
 
         [TestInitialize]
         public void Setup()
@@ -25,12 +27,15 @@ namespace FakeTrello.Tests.DAL
             fake_context = new Mock<FakeTrelloContext>();
             mock_boards_set = new Mock<DbSet<Board>>();
             repo = new FakeTrelloRepository(fake_context.Object);
+
+            sally = new ApplicationUser { Id = "sally-id-1" };
+            sammy = new ApplicationUser { Id = "sammy-id-1" };
         }
 
         public void CreateFakeDatabase()
         {
             query_boards = fake_board_table.AsQueryable(); // Re-express this list as something that understands queries
-            
+
             // Hey LINQ, use the Provider from our *cough* fake *cough* board table/list
             mock_boards_set.As<IQueryable<Board>>().Setup(b => b.Provider).Returns(query_boards.Provider);
             mock_boards_set.As<IQueryable<Board>>().Setup(b => b.Expression).Returns(query_boards.Expression);
@@ -38,6 +43,7 @@ namespace FakeTrello.Tests.DAL
             mock_boards_set.As<IQueryable<Board>>().Setup(b => b.GetEnumerator()).Returns(() => query_boards.GetEnumerator());
 
             mock_boards_set.Setup(b => b.Add(It.IsAny<Board>())).Callback((Board board) => fake_board_table.Add(board));
+            mock_boards_set.Setup(b => b.Remove(It.IsAny<Board>())).Callback((Board board) => fake_board_table.Remove(board));
             fake_context.Setup(c => c.Boards).Returns(mock_boards_set.Object); // Context.Boards returns fake_board_table (a list)
         }
 
@@ -72,7 +78,8 @@ namespace FakeTrello.Tests.DAL
             // Arrange
             CreateFakeDatabase();
 
-            ApplicationUser a_user = new ApplicationUser {
+            ApplicationUser a_user = new ApplicationUser
+            {
                 Id = "my-user-id",
                 UserName = "Sammy",
                 Email = "sammy@gmail.com"
@@ -116,5 +123,43 @@ namespace FakeTrello.Tests.DAL
             Assert.IsNotNull(actual_board);
             Assert.AreEqual(expected_board_name, actual_board_name);
         }
+        [TestMethod]
+        public void EnsureICanGetUserBoard()
+        {
+            // Arrange
+            ApplicationUser sally = new ApplicationUser { }; //we moved this to the top
+            fake_board_table.Add(new Board { BoardId = 1, Name = "my Board", Owner = sally });
+            fake_board_table.Add(new Board { BoardId = 2, Name = "my Board", Owner = sally });
+            fake_board_table.Add(new Board { BoardId = 3, Name = "my Board", Owner = sammy });
+            CreateFakeDatabase();
+
+            // Act
+            int expected_board_count = 2;
+            int actual_board_count = repo.GetBoardsFromUser(sally.Id).Count;
+
+            // Assert
+            Assert.AreEqual(expected_board_count, actual_board_count);
+
+        }
+        [TestMethod]
+        public void EnsureICanRemoveBoard()
+        {
+            // Arrange
+            ApplicationUser Sally = new ApplicationUser();
+            fake_board_table.Add(new Board { BoardId = 1, Name = "my Board", Owner = sally });
+            fake_board_table.Add(new Board { BoardId = 2, Name = "my Board", Owner = sally });
+            fake_board_table.Add(new Board { BoardId = 3, Name = "my Board", Owner = sammy });
+            CreateFakeDatabase();
+
+            // Act
+            int expected_board_count = 2;
+            repo.RemoveBoard(3);
+            int actual_board_count = repo.Context.Boards.Count();
+
+            // Assert
+            Assert.AreEqual(expected_board_count, actual_board_count);
+
+        }
     }
+    
 }
