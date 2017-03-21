@@ -37,8 +37,9 @@ namespace FakeTrello.Tests.DAL
             mock_boards_set.As<IQueryable<Board>>().Setup(b => b.ElementType).Returns(query_boards.ElementType);
             mock_boards_set.As<IQueryable<Board>>().Setup(b => b.GetEnumerator()).Returns(() => query_boards.GetEnumerator());
 
-            mock_boards_set.Setup(b => b.Add(It.IsAny<Board>())).Callback((Board board) => fake_board_table.Add(board));
+            mock_boards_set.Setup(b => b.Add(It.IsAny<Board>())).Callback((Board board) => fake_board_table.Add(board)); // this is telling it to add
             fake_context.Setup(c => c.Boards).Returns(mock_boards_set.Object); // Context.Boards returns fake_board_table (a list)
+            fake_context.Setup(c => c.SaveChanges()).Returns(0).Verifiable(); // must return an integer
         }
 
         [TestMethod]
@@ -115,6 +116,21 @@ namespace FakeTrello.Tests.DAL
             // Assert
             Assert.IsNotNull(actual_board);
             Assert.AreEqual(expected_board_name, actual_board_name);
+        }
+        [TestMethod]
+        public void MakeSureICanEditBoardName()
+        {
+            fake_board_table.Add(new Board { BoardId = 1, Name = "My Board" });
+            CreateFakeDatabase();
+
+            string expected_board_name = "Our Board";
+            repo.EditBoardName(1, expected_board_name);
+            string actual_board_name = repo.GetBoard(1).Name;
+
+            // Assert
+            Assert.AreEqual(expected_board_name, actual_board_name);
+            fake_context.Verify(c => c.SaveChanges(), Times.Once()); // verify that SaveChanges() was called once
+
         }
     }
 }
